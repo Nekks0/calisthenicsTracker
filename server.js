@@ -16,11 +16,14 @@ const TYPES = {
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
 };
-const ALLOWED = new Set(['index.html', 'styles.css', 'data.js', 'app.js', 'sw.js', 'manifest.webmanifest', 'icons/icon.svg']);
+const ALLOWED = new Set(['index.html', 'styles.css', 'data.js', 'sw.js', 'manifest.webmanifest', 'icons/icon.svg']);
+const isAllowed = rel => ALLOWED.has(rel) || /^js\/[a-z-]+\.js$/.test(rel);
 
 const server = http.createServer((req, res) => {
-  let rel = decodeURIComponent(new URL(req.url, 'http://x').pathname).replace(/^\/+/, '') || 'index.html';
-  if (!ALLOWED.has(rel)) { res.writeHead(404); res.end('Nicht gefunden'); return; }
+  let rel;
+  try { rel = decodeURIComponent(new URL(req.url, 'http://x').pathname).replace(/^\/+/, '') || 'index.html'; }
+  catch (e) { res.writeHead(400); res.end('Ungültige Adresse'); return; }
+  if (!isAllowed(rel)) { res.writeHead(404); res.end('Nicht gefunden'); return; }
   fs.readFile(path.join(ROOT, rel), (err, data) => {
     if (err) { res.writeHead(404); res.end('Nicht gefunden'); return; }
     res.writeHead(200, { 'Content-Type': TYPES[path.extname(rel)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });

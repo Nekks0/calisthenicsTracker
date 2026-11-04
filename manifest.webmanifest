@@ -1,6 +1,6 @@
 {
-  "name": "CaliTrack – Calisthenics Tracker",
-  "short_name": "CaliTrack",
+  "name": "CalixTrack – Calisthenics Tracker",
+  "short_name": "CalixTrack",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#0f1115",

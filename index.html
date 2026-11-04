@@ -11,6 +11,10 @@
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/icon.svg">
   <link rel="stylesheet" href="styles.css">
+  <script>
+    // Gewähltes Design sofort setzen, damit beim Start nichts aufblitzt
+    try { var t = localStorage.getItem('calitrack-theme'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) { }
+  </script>
 </head>
 <body>
   <header class="topbar">
@@ -47,7 +51,19 @@
   <div id="toast" class="toast" hidden></div>
   <input type="file" id="importFile" accept="application/json" hidden>
 
+  <!-- Reihenfolge wichtig: core.js zuerst, main.js zuletzt -->
   <script src="data.js"></script>
-  <script src="app.js"></script>
+  <script src="js/core.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/views.js"></script>
+  <script src="js/training.js"></script>
+  <script src="js/steps.js"></script>
+  <script src="js/nutrition.js"></script>
+  <script src="js/backup.js"></script>
+  <script src="js/prefs.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/sync.js"></script>
+  <script src="js/actions.js"></script>
+  <script src="js/main.js"></script>
 </body>
 </html>

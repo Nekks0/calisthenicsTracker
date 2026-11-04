@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f1115">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>CaliTrack – Calisthenics Tracker</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon.svg">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="logo"></span> CaliTrack</div>
+    <div class="topbar-right" id="topStreak"></div>
+  </header>
+
+  <main id="view" class="view"></main>
+
+  <div id="restBar" class="rest-bar" hidden>
+    <div class="rest-progress"><div id="restFill"></div></div>
+    <div class="rest-row">
+      <span>Pause <b id="restTime">0:00</b></span>
+      <div>
+        <button class="btn sm ghost" data-action="rest-add">+15 s</button>
+        <button class="btn sm" data-action="rest-skip">Überspringen</button>
+      </div>
+    </div>
+  </div>
+
+  <nav class="tabbar" id="tabbar">
+    <button data-action="tab" data-tab="home"><span>🏠</span>Heute</button>
+    <button data-action="tab" data-tab="plans"><span>📋</span>Pläne</button>
+    <button data-action="tab" data-tab="nutrition"><span>🍗</span>Ernährung</button>
+    <button data-action="tab" data-tab="steps"><span>👟</span>Schritte</button>
+    <button data-action="tab" data-tab="profile"><span>👤</span>Profil</button>
+  </nav>
+
+  <div id="modal" class="modal" hidden>
+    <div class="modal-backdrop" data-action="close-modal"></div>
+    <div class="modal-card" id="modalCard"></div>
+  </div>
+
+  <div id="toast" class="toast" hidden></div>
+  <input type="file" id="importFile" accept="application/json" hidden>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

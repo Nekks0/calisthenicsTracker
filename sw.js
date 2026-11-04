@@ -1,5 +1,5 @@
 // Service Worker: macht die App offline nutzbar.
-const CACHE = 'calitrack-v1';
+const CACHE = 'calitrack-v2';
 const FILES = ['./', './index.html', './styles.css', './data.js', './app.js', './manifest.webmanifest', './icons/icon.svg'];
 
 self.addEventListener('install', e => {
@@ -10,7 +10,8 @@ self.addEventListener('activate', e => {
 });
 // Netzwerk zuerst (für Updates), bei Offline aus dem Cache.
 self.addEventListener('fetch', e => {
-  if (e.request.method !== 'GET') return;
+  // Fremde Anfragen (Open Food Facts, Scanner-Bibliothek) nicht abfangen
+  if (e.request.method !== 'GET' || new URL(e.request.url).origin !== self.location.origin) return;
   e.respondWith(
     fetch(e.request)
       .then(res => { const copy = res.clone(); caches.open(CACHE).then(c => c.put(e.request, copy)); return res; })

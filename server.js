@@ -42,7 +42,7 @@ function listen(port, tries = 0) {
 server.once('listening', () => {
   server.removeAllListeners('error');
   const port = server.address().port;
-  console.log(`\n  CaliTrack läuft auf:  http://localhost:${port}`);
+  console.log(`\n  CalixTrack läuft auf:  http://localhost:${port}`);
   for (const nets of Object.values(os.networkInterfaces())) {
     for (const n of nets || []) {
       if (n.family === 'IPv4' && !n.internal) console.log(`  Im WLAN (Handy):      http://${n.address}:${port}`);

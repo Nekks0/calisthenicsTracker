@@ -155,18 +155,42 @@ const BUILTIN_PLANS = [
 ];
 
 const FOOD_PRESETS = [
-  { name: 'Magerquark 250 g', kcal: 170, protein: 30 },
-  { name: 'Proteinshake', kcal: 120, protein: 24 },
-  { name: 'Hähnchenbrust 150 g', kcal: 165, protein: 35 },
-  { name: 'Haferflocken 80 g', kcal: 300, protein: 11 },
-  { name: '3 Eier', kcal: 230, protein: 20 },
-  { name: 'Skyr 200 g', kcal: 125, protein: 22 },
-  { name: 'Thunfisch (Dose)', kcal: 116, protein: 26 },
-  { name: 'Reis gekocht 200 g', kcal: 260, protein: 5 },
-  { name: 'Banane', kcal: 105, protein: 1 },
-  { name: 'Linsen gekocht 200 g', kcal: 230, protein: 18 },
-  { name: 'Erdnussbutter 30 g', kcal: 180, protein: 8 },
-  { name: 'Vollkornbrot (2 Scheiben)', kcal: 220, protein: 8 },
+  { name: 'Magerquark 250 g', kcal: 170, protein: 30, carbs: 10, fat: 0.5 },
+  { name: 'Proteinshake', kcal: 120, protein: 24, carbs: 3, fat: 1.5 },
+  { name: 'Hähnchenbrust 150 g', kcal: 165, protein: 35, carbs: 0, fat: 2 },
+  { name: 'Haferflocken 80 g', kcal: 300, protein: 11, carbs: 47, fat: 5.6 },
+  { name: '3 Eier', kcal: 230, protein: 20, carbs: 1.5, fat: 16 },
+  { name: 'Skyr 200 g', kcal: 125, protein: 22, carbs: 8, fat: 0.4 },
+  { name: 'Thunfisch (Dose)', kcal: 116, protein: 26, carbs: 0, fat: 1 },
+  { name: 'Reis gekocht 200 g', kcal: 260, protein: 5, carbs: 57, fat: 0.6 },
+  { name: 'Banane', kcal: 105, protein: 1, carbs: 27, fat: 0.4 },
+  { name: 'Linsen gekocht 200 g', kcal: 230, protein: 18, carbs: 40, fat: 0.8 },
+  { name: 'Erdnussbutter 30 g', kcal: 180, protein: 8, carbs: 4, fat: 15 },
+  { name: 'Vollkornbrot (2 Scheiben)', kcal: 220, protein: 8, carbs: 40, fat: 2.5 },
+];
+
+const MEALS = [
+  { id: 'breakfast', ico: '🌅', name: 'Frühstück' },
+  { id: 'lunch', ico: '☀️', name: 'Mittagessen' },
+  { id: 'dinner', ico: '🌙', name: 'Abendessen' },
+  { id: 'snack', ico: '🍎', name: 'Snacks' },
+];
+
+// Faktoren für den Grundumsatz (PAL-Werte)
+const ACTIVITY_LEVELS = [
+  { value: 1.2, name: 'Kaum aktiv (Bürojob, wenig Bewegung)' },
+  { value: 1.375, name: 'Leicht aktiv (1–3× Training pro Woche)' },
+  { value: 1.55, name: 'Mäßig aktiv (3–5× Training pro Woche)' },
+  { value: 1.725, name: 'Sehr aktiv (6–7× Training pro Woche)' },
+  { value: 1.9, name: 'Extrem aktiv (körperliche Arbeit + Training)' },
+];
+
+// delta: kcal zum Gesamtumsatz, protein: g pro kg Körpergewicht
+const CALORIE_GOALS = [
+  { id: 'cut', name: 'Abnehmen (−500 kcal)', delta: -500, protein: 2.2 },
+  { id: 'mildcut', name: 'Leicht abnehmen (−250 kcal)', delta: -250, protein: 2.0 },
+  { id: 'maintain', name: 'Gewicht halten', delta: 0, protein: 1.8 },
+  { id: 'bulk', name: 'Muskelaufbau (+300 kcal)', delta: 300, protein: 1.8 },
 ];
 
 // check(stats) erhält vorberechnete Kennzahlen aus app.js

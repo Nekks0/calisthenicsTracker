@@ -25,7 +25,10 @@ const today = () => dateKey();
 
 // ---------- Zustand ----------
 const DEFAULT_STATE = {
-  settings: { name: '', weight: 75, kcalGoal: 2500, proteinGoal: 140, stepGoal: 10000, waterGoal: 8, stepLength: 75 },
+  settings: {
+    name: '', weight: 75, kcalGoal: 2500, proteinGoal: 140, carbsGoal: 300, fatGoal: 75, stepGoal: 10000, waterGoal: 8, stepLength: 75,
+    sex: 'm', age: 25, height: 180, activity: 1.55, calGoal: 'bulk',
+  },
   customPlans: [],
   activePlanId: 'b-beginner',
   workouts: [],
@@ -35,10 +38,11 @@ const DEFAULT_STATE = {
   steps: {},
   water: {},
   restDays: {},
+  products: {},
 };
 
 let state = load();
-const ui = { tab: 'home', planId: null, nutDate: today(), editing: null };
+const ui = { tab: 'home', planId: null, nutDate: today(), editing: null, meal: mealByTime(), scanned: null };
 
 function load() {
   try {
@@ -64,7 +68,24 @@ const getPlan = id => allPlans().find(p => p.id === id);
 
 // ---------- Berechnungen ----------
 const dayFoods = k => state.nutrition[k] || [];
-const dayTotals = k => dayFoods(k).reduce((a, f) => ({ kcal: a.kcal + num(f.kcal), protein: a.protein + num(f.protein) }), { kcal: 0, protein: 0 });
+const sumFoods = foods => foods.reduce((a, f) => ({
+  kcal: a.kcal + num(f.kcal), protein: a.protein + num(f.protein), carbs: a.carbs + num(f.carbs), fat: a.fat + num(f.fat),
+}), { kcal: 0, protein: 0, carbs: 0, fat: 0 });
+const dayTotals = k => sumFoods(dayFoods(k));
+const round1 = n => Math.round(num(n) * 10) / 10;
+const fmt1 = n => round1(n).toLocaleString('de-DE');
+const macroLine = f => `P ${fmt1(f.protein)} · K ${fmt1(f.carbs)} · F ${fmt1(f.fat)} g`;
+
+// Mahlzeit nach Uhrzeit vorschlagen; alte Einträge ohne Gruppe werden über die Uhrzeit zugeordnet
+function mealByTime(h = new Date().getHours()) {
+  if (h < 11) return 'breakfast';
+  if (h < 15) return 'lunch';
+  if (h >= 17 && h < 22) return 'dinner';
+  return 'snack';
+}
+const mealOf = f => f.meal || (f.time ? mealByTime(parseInt(f.time, 10)) : 'snack');
+const mealSelect = (selected, attrs = '') => `<select name="meal" ${attrs}>${MEALS.map(m =>
+  `<option value="${m.id}" ${m.id === selected ? 'selected' : ''}>${m.ico} ${m.name}</option>`).join('')}</select>`;
 const workoutsOn = k => state.workouts.filter(w => w.date === k);
 const stepsOn = k => state.steps[k] || 0;
 
@@ -336,9 +357,18 @@ const views = {
     const water = state.water[k] || 0;
     const kcalLeft = s.kcalGoal - tot.kcal, protLeft = s.proteinGoal - tot.protein;
     const favs = state.favorites.length ? state.favorites : FOOD_PRESETS;
+    const prevFoods = dayFoods(addDays(k, -1));
+    const macroRow = (label, value, goal, color) => `
+      <div class="macro-row">
+        <div class="row between"><small>${label}</small><small><b>${fmtNum(value)}</b> / ${fmtNum(goal)} g</small></div>
+        ${pbar(value, goal, color)}
+      </div>`;
 
     return `
-      <h1>Ernährung</h1>
+      <div class="row between">
+        <h1>Ernährung</h1>
+        <button class="btn sm ghost" data-action="calc-open">🧮 Ziele berechnen</button>
+      </div>
       <div class="date-nav mt">
         <button class="btn sm ghost" data-action="nut-prev">‹</button>
         <b>${k === t ? 'Heute' : k === addDays(t, -1) ? 'Gestern' : fmtDate(k, { weekday: 'long', day: 'numeric', month: 'long' })}</b>
@@ -350,32 +380,55 @@ const views = {
           <div>${ring(tot.kcal, s.kcalGoal, 'var(--kcal)', 120, fmtNum(tot.kcal), 'kcal')}<div class="ring-label">${kcalLeft >= 0 ? `noch ${fmtNum(kcalLeft)} kcal` : `${fmtNum(-kcalLeft)} kcal drüber`}</div></div>
           <div>${ring(tot.protein, s.proteinGoal, 'var(--protein)', 120, fmtNum(tot.protein) + ' g', 'Protein')}<div class="ring-label">${protLeft > 0 ? `noch ${fmtNum(protLeft)} g` : 'Ziel erreicht 🎉'}</div></div>
         </div>
+        <div class="macros">
+          ${macroRow('Kohlenhydrate', tot.carbs, s.carbsGoal, 'var(--carbs)')}
+          ${macroRow('Fett', tot.fat, s.fatGoal, 'var(--fat)')}
+        </div>
       </div>
 
-      <div class="card">
-        <h3 style="margin-bottom:12px">Eintrag hinzufügen</h3>
+      <div class="card" id="foodCard">
+        <div class="row between" style="margin-bottom:12px">
+          <h3>Eintrag hinzufügen</h3>
+          <button class="btn sm" data-action="scan-open">📷 Barcode scannen</button>
+        </div>
         <form data-form="food">
           <label class="field"><span>Lebensmittel / Mahlzeit</span><input type="text" name="name" placeholder="z. B. Hähnchen mit Reis" required></label>
+          <label class="field"><span>Mahlzeit</span>${mealSelect(ui.meal, 'data-meal-select')}</label>
           <div class="grid2">
             <label class="field"><span>Kalorien (kcal)</span><input type="number" name="kcal" inputmode="numeric" min="0" placeholder="0"></label>
             <label class="field"><span>Protein (g)</span><input type="number" name="protein" inputmode="decimal" min="0" step="0.1" placeholder="0"></label>
+            <label class="field"><span>Kohlenhydrate (g)</span><input type="number" name="carbs" inputmode="decimal" min="0" step="0.1" placeholder="0"></label>
+            <label class="field"><span>Fett (g)</span><input type="number" name="fat" inputmode="decimal" min="0" step="0.1" placeholder="0"></label>
           </div>
           <label class="checkbox"><input type="checkbox" name="fav"> Als Favorit speichern</label>
           <button class="btn block">Hinzufügen</button>
         </form>
         <div class="section-head" style="margin-top:16px"><small>${state.favorites.length ? 'MEINE FAVORITEN' : 'SCHNELL HINZUFÜGEN'}</small>
           ${state.favorites.length ? '<button class="btn sm icon" data-action="show-presets">Vorlagen</button>' : ''}</div>
-        <div class="chips">${favs.map((f, i) => `<button class="chip" data-action="add-fav" data-i="${i}" data-src="${state.favorites.length ? 'fav' : 'preset'}">${esc(f.name)}<small>${f.kcal} kcal · ${f.protein} g</small></button>`).join('')}</div>
+        <div class="chips">${favs.map((f, i) => `<button class="chip" data-action="add-fav" data-i="${i}" data-src="${state.favorites.length ? 'fav' : 'preset'}">${esc(f.name)}<small>${fmtNum(f.kcal)} kcal · ${fmt1(f.protein)} g P</small></button>`).join('')}</div>
+        <small class="tip">Favoriten und Vorlagen landen in der oben gewählten Mahlzeit.</small>
       </div>
 
       <div class="card">
         <div class="row between"><h3>Einträge</h3><small>${foods.length}</small></div>
-        ${foods.length ? `<ul class="list">${foods.map(f => `
-          <li>
-            <div class="grow"><b>${esc(f.name)}</b><br><small>${f.time || ''}</small></div>
-            <div style="text-align:right"><b>${fmtNum(f.kcal)} kcal</b><br><small style="color:var(--protein)">${num(f.protein)} g Protein</small></div>
-            <button class="btn icon" data-action="delete-food" data-id="${f.id}" aria-label="Löschen">✕</button>
-          </li>`).join('')}</ul>` : '<div class="empty">Noch nichts eingetragen.</div>'}
+        ${MEALS.map(m => {
+          const items = foods.filter(f => mealOf(f) === m.id);
+          const sub = sumFoods(items);
+          const canCopy = !items.length && prevFoods.some(f => mealOf(f) === m.id);
+          return `<div class="meal-group">
+            <div class="row between meal-head">
+              <div class="grow"><b>${m.ico} ${m.name}</b>${items.length ? `<br><small>${fmtNum(sub.kcal)} kcal · ${macroLine(sub)}</small>` : ''}</div>
+              ${canCopy ? `<button class="btn sm ghost" data-action="meal-copy" data-meal="${m.id}" title="Einträge vom Vortag übernehmen">↻ Wie gestern</button>` : ''}
+              <button class="btn sm ghost" data-action="meal-add" data-meal="${m.id}" aria-label="${m.name} hinzufügen">+</button>
+            </div>
+            ${items.length ? `<ul class="list">${items.map(f => `
+              <li>
+                <div class="grow"><b>${esc(f.name)}</b><br><small>${f.time ? f.time + ' · ' : ''}${macroLine(f)}</small></div>
+                <div style="text-align:right;white-space:nowrap"><b>${fmtNum(f.kcal)} kcal</b></div>
+                <button class="btn icon" data-action="delete-food" data-id="${f.id}" aria-label="Löschen">✕</button>
+              </li>`).join('')}</ul>` : ''}
+          </div>`;
+        }).join('')}
       </div>
 
       <div class="card">
@@ -473,10 +526,13 @@ const views = {
             <label class="field"><span>Schrittlänge (cm)</span><input type="number" name="stepLength" min="30" max="150" value="${s.stepLength}"></label>
             <label class="field"><span>Kalorienziel (kcal)</span><input type="number" name="kcalGoal" min="500" value="${s.kcalGoal}"></label>
             <label class="field"><span>Proteinziel (g)</span><input type="number" name="proteinGoal" min="10" value="${s.proteinGoal}"></label>
+            <label class="field"><span>Kohlenhydratziel (g)</span><input type="number" name="carbsGoal" min="0" value="${s.carbsGoal}"></label>
+            <label class="field"><span>Fettziel (g)</span><input type="number" name="fatGoal" min="0" value="${s.fatGoal}"></label>
             <label class="field"><span>Schrittziel</span><input type="number" name="stepGoal" min="100" step="100" value="${s.stepGoal}"></label>
             <label class="field"><span>Wasserziel (Gläser à 250 ml)</span><input type="number" name="waterGoal" min="1" max="24" value="${s.waterGoal}"></label>
           </div>
           <p class="tip">💡 Empfehlung für Muskelaufbau: ca. 1,6–2,2 g Protein pro kg, bei ${s.weight} kg also rund <b>${recProtein} g</b> am Tag.</p>
+          <button type="button" class="btn ghost block mt" data-action="calc-open">🧮 Kalorien- & Makrorechner</button>
           <button class="btn block mt">Speichern</button>
         </form>
       </div>
@@ -570,7 +626,7 @@ function openModal(title, body) {
   const first = $('#modalCard input[type=text]');
   if (first && matchMedia('(pointer:fine)').matches) first.focus();
 }
-function closeModal() { $('#modal').hidden = true; $('#modalCard').innerHTML = ''; ui.editing = null; }
+function closeModal() { stopScanner(); $('#modal').hidden = true; $('#modalCard').innerHTML = ''; ui.editing = null; ui.scanned = null; }
 
 let toastTimer;
 function toast(msg) {
@@ -773,6 +829,242 @@ function updateLiveSteps() {
   $$('[data-live-session]').forEach(el => (el.textContent = pedo.session));
 }
 
+// ---------- Barcode-Scanner (Nährwerte von Open Food Facts) ----------
+// Chrome/Android hat einen eingebauten BarcodeDetector, sonst wird ein Polyfill (ZXing/WASM) nachgeladen.
+const BARCODE_POLYFILL = 'https://cdn.jsdelivr.net/npm/barcode-detector@2.2.11/dist/es/pure.min.js';
+const BARCODE_FORMATS = ['ean_13', 'ean_8', 'upc_a', 'upc_e'];
+const scan = { id: 0, stream: null, timer: null, detector: null };
+
+async function getDetector() {
+  if (scan.detector) return scan.detector;
+  let Detector = window.BarcodeDetector;
+  if (Detector) {
+    try { if (!(await Detector.getSupportedFormats()).includes('ean_13')) Detector = null; }
+    catch (e) { Detector = null; }
+  }
+  if (!Detector) Detector = (await import(BARCODE_POLYFILL)).BarcodeDetector;
+  scan.detector = new Detector({ formats: BARCODE_FORMATS });
+  return scan.detector;
+}
+
+// Jeder Aufruf macht laufende Scans und Suchen ungültig (scan.id)
+function stopScanner() {
+  scan.id++;
+  clearTimeout(scan.timer);
+  scan.stream?.getTracks().forEach(t => t.stop());
+  scan.stream = null;
+}
+
+function openScanner() {
+  openModal('Barcode scannen', `
+    <div class="scanner" id="scanBox"><video id="scanVideo" playsinline muted></video><div class="scan-frame"></div></div>
+    <p class="tip" id="scanMsg">Kamera wird gestartet …</p>
+    <form data-form="barcode" class="row mt">
+      <input type="text" name="code" inputmode="numeric" autocomplete="off" placeholder="Oder Barcode eintippen" class="grow">
+      <button class="btn">Suchen</button>
+    </form>
+    <small class="tip">Nährwerte von Open Food Facts. Gescannte Produkte bleiben auch offline gespeichert.</small>`);
+  startScanner();
+}
+
+async function startScanner() {
+  stopScanner();
+  const id = scan.id;
+  const msg = text => { const el = $('#scanMsg'); if (el) el.textContent = text; };
+  const fail = text => { stopScanner(); msg(text); $('#scanBox')?.remove(); };
+  if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+    fail('📷 Die Kamera braucht HTTPS oder localhost. Gib den Barcode unten ein.');
+    return;
+  }
+  try {
+    const detector = await getDetector();
+    if (id !== scan.id) return;
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+    if (id !== scan.id) { stream.getTracks().forEach(t => t.stop()); return; }
+    scan.stream = stream;
+    const video = $('#scanVideo');
+    video.srcObject = stream;
+    await video.play();
+    if (id !== scan.id) return;
+    msg('Halte den Barcode in den Rahmen.');
+    let errors = 0;
+    const loop = async () => {
+      if (id !== scan.id) return;
+      try {
+        if (video.readyState >= 2) {
+          const codes = await detector.detect(video);
+          if (id !== scan.id) return;
+          errors = 0;
+          if (codes.length) {
+            if (navigator.vibrate) navigator.vibrate(60);
+            lookupBarcode(codes[0].rawValue);
+            return;
+          }
+        }
+      } catch (e) {
+        if (++errors > 15) { fail('Scanner funktioniert hier nicht. Gib den Barcode unten ein.'); return; }
+      }
+      scan.timer = setTimeout(loop, 200);
+    };
+    loop();
+  } catch (e) {
+    if (id !== scan.id) return;
+    fail(e?.name === 'NotAllowedError' ? '🚫 Kamerazugriff verweigert. Erlaube die Kamera in den Browser-Einstellungen oder gib den Barcode unten ein.'
+      : e?.name === 'NotFoundError' ? 'Keine Kamera gefunden. Gib den Barcode unten ein.'
+      : 'Scanner konnte nicht gestartet werden (offline?). Gib den Barcode unten ein.');
+  }
+}
+
+async function lookupBarcode(raw) {
+  const code = String(raw || '').replace(/\D/g, '');
+  if (code.length < 8 || code.length > 14) { toast('Ungültiger Barcode (8–14 Ziffern)'); return; }
+  stopScanner();
+  const id = scan.id;
+  if (state.products[code]) { showProduct(state.products[code]); return; }
+  openModal('Produkt wird gesucht …', `<div class="empty">⏳ Lade Nährwerte für ${code} …</div>`);
+  try {
+    const res = await fetch(`https://world.openfoodfacts.org/api/v2/product/${code}.json?fields=product_name,product_name_de,brands,nutriments,serving_quantity`);
+    const data = await res.json();
+    if (id !== scan.id) return;
+    if (data.status !== 1 || !data.product) {
+      openModal('Produkt nicht gefunden', `
+        <p class="muted">Zum Barcode <b>${code}</b> gibt es keine Daten bei Open Food Facts. Trag die Nährwerte von der Verpackung manuell ein.</p>
+        <div class="row mt"><button class="btn ghost grow" data-action="scan-open">Erneut scannen</button><button class="btn grow" data-action="food-focus">Manuell eintragen</button></div>`);
+      return;
+    }
+    const prod = parseProduct(code, data.product);
+    state.products[code] = prod;
+    save();
+    showProduct(prod);
+  } catch (e) {
+    if (id !== scan.id) return;
+    openModal('Keine Verbindung', `
+      <p class="muted">Die Produktdaten konnten nicht geladen werden. Prüfe deine Internetverbindung.</p>
+      <div class="row mt"><button class="btn ghost grow" data-action="close-modal">Schließen</button><button class="btn grow" data-action="scan-lookup" data-code="${code}">Erneut versuchen</button></div>`);
+  }
+}
+
+function parseProduct(code, p) {
+  const n = p.nutriments || {};
+  const val = key => (n[key] == null || n[key] === '' ? null : num(n[key], null));
+  let kcal = val('energy-kcal_100g');
+  if (kcal == null && val('energy_100g') != null) kcal = val('energy_100g') / 4.184; // energy_100g ist in kJ
+  const name = String(p.product_name_de || p.product_name || '').trim();
+  const brand = String(p.brands || '').split(',')[0].trim();
+  return {
+    code,
+    name: [name, brand].filter(Boolean).join(' · ') || `Produkt ${code}`,
+    per100: { kcal: kcal == null ? null : Math.round(kcal), protein: val('proteins_100g'), carbs: val('carbohydrates_100g'), fat: val('fat_100g') },
+    serving: Math.max(0, num(p.serving_quantity)),
+  };
+}
+
+function portion(prod, g) {
+  const v = k => num(prod.per100[k]) * g / 100;
+  return { name: `${prod.name} (${fmt1(g)} g)`, kcal: Math.round(v('kcal')), protein: round1(v('protein')), carbs: round1(v('carbs')), fat: round1(v('fat')) };
+}
+
+function scanPreview(prod, g) {
+  const f = portion(prod, g);
+  return `
+    <div class="stat"><b style="color:var(--kcal)">${fmtNum(f.kcal)}</b><small>kcal</small></div>
+    <div class="stat"><b style="color:var(--protein)">${fmt1(f.protein)} g</b><small>Protein</small></div>
+    <div class="stat"><b style="color:var(--carbs)">${fmt1(f.carbs)} g</b><small>Kohlenhydrate</small></div>
+    <div class="stat"><b style="color:var(--fat)">${fmt1(f.fat)} g</b><small>Fett</small></div>`;
+}
+
+function showProduct(prod) {
+  ui.scanned = prod;
+  const p = prod.per100;
+  const incomplete = Object.values(p).some(v => v == null);
+  const amount = prod.serving || 100;
+  openModal('Produkt gefunden', `
+    <h3>${esc(prod.name)}</h3>
+    <small>Pro 100 g: ${p.kcal == null ? '?' : fmtNum(p.kcal)} kcal · ${macroLine(p)}</small>
+    ${incomplete ? '<p class="tip">⚠️ Nicht alle Nährwerte sind hinterlegt. Fehlende Werte zählen als 0.</p>' : ''}
+    <form data-form="scanned" data-live="scanned" class="mt">
+      <div class="grid2">
+        <label class="field"><span>Menge (g / ml)</span><input type="number" name="amount" inputmode="decimal" min="1" step="any" value="${amount}" required></label>
+        <label class="field"><span>Mahlzeit</span>${mealSelect(ui.meal)}</label>
+      </div>
+      <div class="chips" style="margin-bottom:12px">
+        ${prod.serving ? `<button type="button" class="chip" data-action="scan-amount" data-g="${prod.serving}">1 Portion (${fmt1(prod.serving)} g)</button>` : ''}
+        ${[50, 100, 200].map(g => `<button type="button" class="chip" data-action="scan-amount" data-g="${g}">${g} g</button>`).join('')}
+      </div>
+      <div class="grid2" id="scanPreview">${scanPreview(prod, amount)}</div>
+      <label class="checkbox mt"><input type="checkbox" name="fav"> Als Favorit speichern</label>
+      <button class="btn block">Hinzufügen</button>
+    </form>`);
+}
+
+// ---------- Kalorienrechner (Mifflin-St-Jeor) ----------
+const calcInput = fd => ({
+  sex: fd.get('sex') === 'f' ? 'f' : 'm',
+  age: num(fd.get('age')),
+  height: num(fd.get('height')),
+  weight: num(fd.get('weight')),
+  activity: num(fd.get('activity'), 1.55),
+  calGoal: fd.get('calGoal'),
+});
+const calcValid = o => o.age >= 14 && o.age <= 100 && o.height >= 120 && o.height <= 230 && o.weight >= 30 && o.weight <= 300;
+
+function calcTargets(o) {
+  const goal = CALORIE_GOALS.find(g => g.id === o.calGoal) || CALORIE_GOALS[2];
+  const bmr = 10 * o.weight + 6.25 * o.height - 5 * o.age + (o.sex === 'f' ? -161 : 5);
+  const tdee = bmr * o.activity;
+  const kcal = Math.max(o.sex === 'f' ? 1200 : 1500, Math.round((tdee + goal.delta) / 10) * 10);
+  const protein = Math.round(o.weight * goal.protein);
+  const fat = Math.round(kcal * 0.25 / 9);
+  const carbs = Math.max(0, Math.round((kcal - protein * 4 - fat * 9) / 4));
+  return { bmr: Math.round(bmr), tdee: Math.round(tdee), kcal, protein, carbs, fat };
+}
+
+function calcResult(o) {
+  if (!calcValid(o)) return '<p class="tip">Bitte gib gültige Werte ein (Alter 14–100, Größe 120–230 cm, Gewicht 30–300 kg).</p>';
+  const r = calcTargets(o);
+  return `
+    <div class="grid2">
+      <div class="stat"><b>${fmtNum(r.bmr)}</b><small>Grundumsatz (kcal)</small></div>
+      <div class="stat"><b>${fmtNum(r.tdee)}</b><small>Gesamtumsatz (kcal)</small></div>
+    </div>
+    <div class="stat mt"><b style="color:var(--kcal)">${fmtNum(r.kcal)} kcal</b><small>Dein Tagesziel</small></div>
+    <div class="grid3 mt">
+      <div class="stat"><b style="color:var(--protein)">${r.protein} g</b><small>Protein</small></div>
+      <div class="stat"><b style="color:var(--carbs)">${r.carbs} g</b><small>Kohlenhydrate</small></div>
+      <div class="stat"><b style="color:var(--fat)">${r.fat} g</b><small>Fett</small></div>
+    </div>`;
+}
+
+function openCalculator() {
+  const s = state.settings;
+  openModal('Kalorienrechner', `
+    <form data-form="calc" data-live="calc">
+      <div class="grid2">
+        <label class="field"><span>Geschlecht</span><select name="sex">
+          <option value="m" ${s.sex !== 'f' ? 'selected' : ''}>Männlich</option>
+          <option value="f" ${s.sex === 'f' ? 'selected' : ''}>Weiblich</option>
+        </select></label>
+        <label class="field"><span>Alter</span><input type="number" name="age" inputmode="numeric" min="14" max="100" value="${s.age}" required></label>
+        <label class="field"><span>Größe (cm)</span><input type="number" name="height" inputmode="numeric" min="120" max="230" value="${s.height}" required></label>
+        <label class="field"><span>Gewicht (kg)</span><input type="number" name="weight" inputmode="decimal" min="30" max="300" step="0.1" value="${s.weight}" required></label>
+      </div>
+      <label class="field"><span>Aktivität</span><select name="activity">${ACTIVITY_LEVELS.map(a =>
+        `<option value="${a.value}" ${+a.value === +s.activity ? 'selected' : ''}>${a.name}</option>`).join('')}</select></label>
+      <label class="field"><span>Ziel</span><select name="calGoal">${CALORIE_GOALS.map(g =>
+        `<option value="${g.id}" ${g.id === s.calGoal ? 'selected' : ''}>${g.name}</option>`).join('')}</select></label>
+      <div id="calcOut">${calcResult(s)}</div>
+      <p class="tip">Berechnung nach Mifflin-St-Jeor. Protein je nach Ziel 1,8–2,2 g pro kg, Fett 25 % der Kalorien, der Rest Kohlenhydrate. Das sind Richtwerte – passe sie nach 2–3 Wochen an deinen Fortschritt an.</p>
+      <button class="btn block mt">Als Ziele übernehmen</button>
+    </form>`);
+}
+
+function focusFoodForm() {
+  const sel = $('[data-meal-select]');
+  if (sel) sel.value = ui.meal;
+  $('#foodCard')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  setTimeout(() => $('[data-form=food] input[name=name]')?.focus({ preventScroll: true }), 350);
+}
+
 // ---------- Plan-Editor ----------
 function openPlanEditor(plan) {
   ui.editing = plan;
@@ -931,12 +1223,31 @@ const actions = {
   'show-presets': () => {
     openModal('Vorlagen & Favoriten', `
       ${state.favorites.length ? `<h3>Meine Favoriten</h3><ul class="list">${state.favorites.map((f, i) => `
-        <li><div class="grow"><b>${esc(f.name)}</b><br><small>${f.kcal} kcal · ${f.protein} g</small></div>
+        <li><div class="grow"><b>${esc(f.name)}</b><br><small>${fmtNum(f.kcal)} kcal · ${macroLine(f)}</small></div>
         <button class="btn icon" data-action="delete-fav" data-i="${i}">✕</button></li>`).join('')}</ul>` : ''}
       <h3 class="mt">Vorlagen</h3>
-      <div class="chips mt">${FOOD_PRESETS.map((f, i) => `<button class="chip" data-action="add-fav" data-i="${i}" data-src="preset">${esc(f.name)}<small>${f.kcal} kcal · ${f.protein} g</small></button>`).join('')}</div>
+      <div class="chips mt">${FOOD_PRESETS.map((f, i) => `<button class="chip" data-action="add-fav" data-i="${i}" data-src="preset">${esc(f.name)}<small>${fmtNum(f.kcal)} kcal · ${fmt1(f.protein)} g P</small></button>`).join('')}</div>
     `);
   },
+  'meal-add': d => { ui.meal = d.meal; focusFoodForm(); },
+  'meal-copy': d => {
+    const k = ui.nutDate;
+    const items = dayFoods(addDays(k, -1)).filter(f => mealOf(f) === d.meal);
+    if (!items.length) return;
+    state.nutrition[k] = [...dayFoods(k), ...items.map(f => ({ ...f, id: uid(), meal: d.meal, time: '' }))];
+    save(); render();
+    toast(`✓ ${items.length} ${items.length === 1 ? 'Eintrag' : 'Einträge'} übernommen`);
+  },
+  'scan-open': () => openScanner(),
+  'scan-lookup': d => lookupBarcode(d.code),
+  'scan-amount': d => {
+    const inp = $('#modalCard input[name=amount]');
+    if (!inp) return;
+    inp.value = d.g;
+    inp.dispatchEvent(new Event('input', { bubbles: true }));
+  },
+  'food-focus': () => { closeModal(); focusFoodForm(); },
+  'calc-open': () => openCalculator(),
   'delete-fav': d => { state.favorites.splice(+d.i, 1); save(); closeModal(); render(); },
   'delete-food': d => {
     const k = ui.nutDate;
@@ -944,7 +1255,7 @@ const actions = {
     if (!state.nutrition[k].length) delete state.nutrition[k];
     save(); render();
   },
-  'quick-food': () => { ui.nutDate = today(); go('nutrition'); setTimeout(() => $('[data-form=food] input[name=name]')?.focus(), 50); },
+  'quick-food': () => { ui.nutDate = today(); ui.meal = mealByTime(); go('nutrition'); setTimeout(() => $('[data-form=food] input[name=name]')?.focus(), 50); },
   'water-add': () => { const k = today(); state.water[k] = (state.water[k] || 0) + 1; save(); render(); toast(`💧 ${state.water[k]} / ${state.settings.waterGoal} Gläser`); },
   'water-set': d => { state.water[ui.nutDate] = +d.n; save(); render(); },
 
@@ -970,10 +1281,11 @@ const actions = {
   },
 };
 
-function addFood(k, f) {
+function addFood(k, f, meal = ui.meal) {
   const now = new Date();
   (state.nutrition[k] = state.nutrition[k] || []).push({
-    id: uid(), name: f.name, kcal: num(f.kcal), protein: num(f.protein),
+    id: uid(), name: f.name, kcal: num(f.kcal), protein: round1(f.protein), carbs: round1(f.carbs), fat: round1(f.fat),
+    meal: MEALS.some(m => m.id === meal) ? meal : 'snack',
     time: k === today() ? `${pad(now.getHours())}:${pad(now.getMinutes())}` : '',
   });
   save(); render();
@@ -983,10 +1295,33 @@ function addFood(k, f) {
 // ---------- Formulare ----------
 const forms = {
   food(fd, form) {
-    const f = { name: fd.get('name').trim(), kcal: num(fd.get('kcal')), protein: num(fd.get('protein')) };
+    const f = {
+      name: fd.get('name').trim(), kcal: Math.max(0, num(fd.get('kcal'))), protein: Math.max(0, round1(fd.get('protein'))),
+      carbs: Math.max(0, round1(fd.get('carbs'))), fat: Math.max(0, round1(fd.get('fat'))),
+    };
     if (!f.name) return;
+    ui.meal = fd.get('meal') || ui.meal;
     if (fd.get('fav') && !state.favorites.some(x => x.name === f.name)) state.favorites.push({ ...f });
     addFood(ui.nutDate, f);
+  },
+  scanned(fd) {
+    const prod = ui.scanned;
+    if (!prod) return;
+    const g = num(fd.get('amount'));
+    if (g <= 0) { toast('Bitte eine Menge eingeben'); return; }
+    const f = portion(prod, g);
+    ui.meal = fd.get('meal') || ui.meal;
+    if (fd.get('fav') && !state.favorites.some(x => x.name === f.name)) state.favorites.push({ ...f });
+    closeModal();
+    addFood(ui.nutDate, f);
+  },
+  barcode(fd) { lookupBarcode(fd.get('code')); },
+  calc(fd) {
+    const o = calcInput(fd);
+    if (!calcValid(o)) { toast('Bitte gültige Werte eingeben'); return; }
+    const r = calcTargets(o);
+    Object.assign(state.settings, o, { kcalGoal: r.kcal, proteinGoal: r.protein, carbsGoal: r.carbs, fatGoal: r.fat });
+    save(); closeModal(); render(); toast('Ziele übernommen ✓');
   },
   steps(fd) {
     const v = Math.round(num(fd.get('steps'), -1));
@@ -1000,6 +1335,8 @@ const forms = {
     s.stepLength = num(fd.get('stepLength'), s.stepLength);
     s.kcalGoal = num(fd.get('kcalGoal'), s.kcalGoal);
     s.proteinGoal = num(fd.get('proteinGoal'), s.proteinGoal);
+    s.carbsGoal = Math.max(0, num(fd.get('carbsGoal'), s.carbsGoal));
+    s.fatGoal = Math.max(0, num(fd.get('fatGoal'), s.fatGoal));
     s.stepGoal = num(fd.get('stepGoal'), s.stepGoal);
     s.waterGoal = Math.round(num(fd.get('waterGoal'), s.waterGoal));
     save(); render(); toast('Einstellungen gespeichert ✓');
@@ -1038,6 +1375,10 @@ document.addEventListener('input', e => {
     state.activeWorkout.exercises[ei].sets[si].reps = Math.max(0, Math.round(num(t.value)));
     save(false);
   }
+  if (t.matches('[data-meal-select]')) ui.meal = t.value;
+  const live = t.closest('[data-live]');
+  if (live?.dataset.live === 'calc') $('#calcOut').innerHTML = calcResult(calcInput(new FormData(live)));
+  if (live?.dataset.live === 'scanned' && ui.scanned) $('#scanPreview').innerHTML = scanPreview(ui.scanned, Math.max(0, num(live.elements.amount.value)));
   const p = ui.editing;
   if (!p) return;
   if (t.dataset.edit) p[t.dataset.edit] = t.dataset.edit === 'level' || t.dataset.edit === 'perWeek' ? +t.value : t.value;
